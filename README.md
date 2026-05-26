@@ -13,6 +13,7 @@ Lightweight REST API and embeddable Web Component for controlling Harness FME (S
 - [Web Component Usage](#web-component-usage)
 - [Embedding in Your App](#embedding-in-your-app)
 - [Deployment](#deployment)
+  - [Security Considerations](#security-considerations)
 - [Development](#development)
 
 ## Introduction
@@ -380,6 +381,34 @@ export class AppComponent {
 ```
 
 ## Deployment
+
+### Security Considerations
+
+**IMPORTANT:** The FME Kit API has **no authentication layer**. It relies entirely on your application's existing security context. Anyone who can view the HTML source or network traffic can extract the API endpoint, flag names, workspace IDs, and environment names — and use them to modify flags.
+
+**✅ Safe Deployment Contexts:**
+- Internal admin portals (users already authenticated to host application)
+- Behind corporate VPN or firewall
+- Applications requiring login (component only visible after authentication)
+- Network-restricted environments (IP allowlist, private networks)
+- Internal developer tools and dashboards
+
+**❌ Unsafe Deployment Contexts:**
+- Public marketing pages or landing pages
+- Unauthenticated sections of your application
+- Any page accessible to untrusted or anonymous users
+- Customer-facing interfaces without access control
+
+**The kill switch is especially sensitive** — a malicious actor who discovers your API endpoint could cause immediate production outages by killing critical flags.
+
+**If you need additional security:**
+- Deploy the API behind your existing authentication middleware
+- Add API token validation (issue short-lived tokens from your backend)
+- Implement IP allowlisting at the infrastructure level
+- Use rate limiting to slow automated attacks
+- Restrict CORS to known origins only
+
+**Bottom line:** Only embed FME Kit in authenticated, access-controlled contexts where you trust all users who can view the page source.
 
 ### Backend (Vercel)
 
