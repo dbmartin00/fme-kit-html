@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Debug Flag Component</title>
+</head>
+<body>
+  <h1>Debug Flag Component</h1>
+  <div id="status" style="background: #f0f0f0; padding: 20px; margin: 20px 0; font-family: monospace; font-size: 12px;">
+    Initializing...
+  </div>
+
+  <hr>
+
+  <div id="flag-container">
+    <fme-flag
+      flag="ff_ops_route_policy_evaluator_v2"
+      workspace="37200d40-401e-11f1-acc9-f629ae8e8506"
+      env="dev"
+      api-url="http://localhost:3000/api"
+      poll-interval="0">
+    </fme-flag>
+  </div>
+
+  <script type="module">
+    import './fme-flag.js';
+
+    const statusDiv = document.getElementById('status');
+
+    function log(msg) {
+      console.log(msg);
+      statusDiv.innerHTML += '<br>' + msg;
+    }
+
+    log('Script loaded');
+
+    // Test API directly
+    fetch('http://localhost:3000/api/health')
+      .then(r => r.json())
+      .then(data => log('API health check: ' + JSON.stringify(data)))
+      .catch(err => log('API health check FAILED: ' + err.message));
+
+    window.addEventListener('DOMContentLoaded', () => {
+      log('DOM loaded');
+
+      customElements.whenDefined('fme-flag').then(() => {
+        log('Custom element defined');
+
+        const flag = document.querySelector('fme-flag');
+        log('Flag element: ' + (flag ? 'found' : 'not found'));
+
+        if (flag) {
+          log('Flag attributes: flag=' + flag.getAttribute('flag') + ', workspace=' + flag.getAttribute('workspace'));
+
+          flag.addEventListener('state-changed', (e) => {
+            log('✅ STATE CHANGED: ' + JSON.stringify(e.detail));
+          });
+
+          flag.addEventListener('error', (e) => {
+            log('❌ ERROR: ' + e.detail.message);
+          });
+
+          // Check state periodically
+          let checks = 0;
+          const checkInterval = setInterval(() => {
+            checks++;
+            log(`Check ${checks}: state=${flag.state}, hasData=${!!flag.flagData}`);
+            if (flag.flagData || checks >= 5) {
+              clearInterval(checkInterval);
+              if (flag.flagData) {
+                log('Final data: ' + JSON.stringify(flag.flagData));
+              }
+            }
+          }, 1000);
+        }
+      });
+    });
+  </script>
+</body>
+</html>

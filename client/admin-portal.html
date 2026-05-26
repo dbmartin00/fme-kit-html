@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Portal - Dashboard</title>
+  <script type="module" src="./fme-flag.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+      background: #f5f7fa;
+      color: #2d3748;
+    }
+
+    /* Header */
+    .header {
+      background: white;
+      height: 64px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      display: flex;
+      align-items: center;
+      padding: 0 24px;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+    }
+
+    .logo {
+      font-size: 24px;
+      font-weight: 700;
+      color: #1976d2;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-icon {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 700;
+      font-size: 18px;
+    }
+
+    .header-spacer {
+      flex: 1;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .search-box {
+      position: relative;
+    }
+
+    .search-box input {
+      padding: 8px 12px 8px 36px;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      width: 300px;
+      font-size: 14px;
+    }
+
+    .search-box::before {
+      content: "🔍";
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+
+    .user-menu {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      padding: 8px 12px;
+      border-radius: 6px;
+      transition: background 0.2s;
+    }
+
+    .user-menu:hover {
+      background: #f7fafc;
+    }
+
+    .user-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .user-name {
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 240px;
+      background: #1a202c;
+      position: fixed;
+      top: 64px;
+      left: 0;
+      bottom: 0;
+      padding: 24px 0;
+      overflow-y: auto;
+    }
+
+    .nav-section {
+      margin-bottom: 24px;
+    }
+
+    .nav-title {
+      color: #718096;
+      font-size: 11px;
+      text-transform: uppercase;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      padding: 0 24px;
+      margin-bottom: 12px;
+    }
+
+    .nav-item {
+      color: #cbd5e0;
+      padding: 10px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 14px;
+      text-decoration: none;
+    }
+
+    .nav-item:hover {
+      background: rgba(255,255,255,0.05);
+      color: white;
+    }
+
+    .nav-item.active {
+      background: rgba(102, 126, 234, 0.2);
+      color: white;
+      border-left: 3px solid #667eea;
+    }
+
+    .nav-icon {
+      font-size: 18px;
+      width: 20px;
+      text-align: center;
+    }
+
+    /* Main Content */
+    .main-content {
+      margin-left: 240px;
+      margin-top: 64px;
+      padding: 32px;
+      min-height: calc(100vh - 64px);
+    }
+
+    .page-header {
+      margin-bottom: 32px;
+    }
+
+    .page-title {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .page-subtitle {
+      color: #718096;
+      font-size: 14px;
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 24px;
+      margin-bottom: 32px;
+    }
+
+    .stat-card {
+      background: white;
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .stat-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .stat-title {
+      color: #718096;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .stat-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+
+    .stat-icon.blue { background: #dbeafe; }
+    .stat-icon.green { background: #d1fae5; }
+    .stat-icon.purple { background: #e9d5ff; }
+    .stat-icon.orange { background: #fed7aa; }
+
+    .stat-value {
+      font-size: 32px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .stat-change {
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .stat-change.positive { color: #10b981; }
+    .stat-change.negative { color: #ef4444; }
+
+    /* Content Grid */
+    .content-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 24px;
+      margin-bottom: 32px;
+    }
+
+    .card {
+      background: white;
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .card-title {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .card-action {
+      color: #667eea;
+      font-size: 14px;
+      cursor: pointer;
+      text-decoration: none;
+    }
+
+    .card-action:hover {
+      text-decoration: underline;
+    }
+
+    /* Table */
+    .table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .table th {
+      text-align: left;
+      padding: 12px 0;
+      border-bottom: 2px solid #e2e8f0;
+      font-size: 12px;
+      color: #718096;
+      text-transform: uppercase;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    .table td {
+      padding: 16px 0;
+      border-bottom: 1px solid #e2e8f0;
+      font-size: 14px;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .status-badge.success {
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    .status-badge.pending {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    .status-badge.failed {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    /* Activity List */
+    .activity-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .activity-item {
+      display: flex;
+      gap: 12px;
+    }
+
+    .activity-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .activity-content {
+      flex: 1;
+    }
+
+    .activity-text {
+      font-size: 14px;
+      margin-bottom: 4px;
+    }
+
+    .activity-time {
+      font-size: 12px;
+      color: #718096;
+    }
+
+    /* Flag Control Widget */
+    .flag-widget {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 1000;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1), 0 10px 20px rgba(0,0,0,0.15);
+      border-radius: 12px;
+      max-width: 380px;
+      animation: slideIn 0.3s ease-out;
+    }
+
+    @keyframes slideIn {
+      from {
+        transform: translateY(100px);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <div class="header">
+    <div class="logo">
+      <div class="logo-icon">A</div>
+      <span>Admin Portal</span>
+    </div>
+    <div class="header-spacer"></div>
+    <div class="header-actions">
+      <div class="search-box">
+        <input type="text" placeholder="Search...">
+      </div>
+      <div class="user-menu">
+        <div class="user-avatar">DM</div>
+        <div class="user-name">David Martin</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="nav-section">
+      <div class="nav-title">Main</div>
+      <a href="#" class="nav-item active">
+        <span class="nav-icon">📊</span>
+        <span>Dashboard</span>
+      </a>
+      <a href="#" class="nav-item">
+        <span class="nav-icon">👥</span>
+        <span>Users</span>
+      </a>
+      <a href="#" class="nav-item">
+        <span class="nav-icon">📈</span>
+        <span>Analytics</span>
+      </a>
+      <a href="#" class="nav-item">
+        <span class="nav-icon">💳</span>
+        <span>Billing</span>
+      </a>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-title">Management</div>
+      <a href="#" class="nav-item">
+        <span class="nav-icon">⚙️</span>
+        <span>Settings</span>
+      </a>
+      <a href="#" class="nav-item">
+        <span class="nav-icon">🚩</span>
+        <span>Feature Flags</span>
+      </a>
+      <a href="#" class="nav-item">
+        <span class="nav-icon">🔐</span>
+        <span>Security</span>
+      </a>
+      <a href="#" class="nav-item">
+        <span class="nav-icon">📝</span>
+        <span>Audit Logs</span>
+      </a>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-title">Support</div>
+      <a href="#" class="nav-item">
+        <span class="nav-icon">📚</span>
+        <span>Documentation</span>
+      </a>
+      <a href="#" class="nav-item">
+        <span class="nav-icon">💬</span>
+        <span>Support</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-content">
+    <div class="page-header">
+      <div class="page-title">Dashboard Overview</div>
+      <div class="page-subtitle">Welcome back, David. Here's what's happening today.</div>
+    </div>
+
+    <!-- Stats Grid -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-header">
+          <div class="stat-title">Total Users</div>
+          <div class="stat-icon blue">👥</div>
+        </div>
+        <div class="stat-value">24,532</div>
+        <div class="stat-change positive">
+          <span>↑ 12.5%</span>
+          <span>from last month</span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-header">
+          <div class="stat-title">Revenue</div>
+          <div class="stat-icon green">💰</div>
+        </div>
+        <div class="stat-value">$89,420</div>
+        <div class="stat-change positive">
+          <span>↑ 8.3%</span>
+          <span>from last month</span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-header">
+          <div class="stat-title">Active Sessions</div>
+          <div class="stat-icon purple">⚡</div>
+        </div>
+        <div class="stat-value">1,249</div>
+        <div class="stat-change positive">
+          <span>↑ 3.2%</span>
+          <span>from last hour</span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-header">
+          <div class="stat-title">Error Rate</div>
+          <div class="stat-icon orange">⚠️</div>
+        </div>
+        <div class="stat-value">0.4%</div>
+        <div class="stat-change negative">
+          <span>↓ 0.1%</span>
+          <span>from last week</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Content Grid -->
+    <div class="content-grid">
+      <!-- Recent Deployments -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Recent Deployments</div>
+          <a href="#" class="card-action">View all →</a>
+        </div>
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Service</th>
+              <th>Version</th>
+              <th>Status</th>
+              <th>Time</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>api-gateway</td>
+              <td>v2.4.1</td>
+              <td><span class="status-badge success">Success</span></td>
+              <td>5 min ago</td>
+            </tr>
+            <tr>
+              <td>user-service</td>
+              <td>v1.8.3</td>
+              <td><span class="status-badge success">Success</span></td>
+              <td>23 min ago</td>
+            </tr>
+            <tr>
+              <td>payment-processor</td>
+              <td>v3.1.0</td>
+              <td><span class="status-badge pending">Pending</span></td>
+              <td>1 hour ago</td>
+            </tr>
+            <tr>
+              <td>notification-service</td>
+              <td>v2.2.5</td>
+              <td><span class="status-badge success">Success</span></td>
+              <td>2 hours ago</td>
+            </tr>
+            <tr>
+              <td>analytics-engine</td>
+              <td>v4.0.1</td>
+              <td><span class="status-badge failed">Failed</span></td>
+              <td>3 hours ago</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Recent Activity -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Recent Activity</div>
+          <a href="#" class="card-action">View all →</a>
+        </div>
+        <div class="activity-list">
+          <div class="activity-item">
+            <div class="activity-avatar">JD</div>
+            <div class="activity-content">
+              <div class="activity-text"><strong>Jane Doe</strong> deployed api-gateway v2.4.1</div>
+              <div class="activity-time">5 minutes ago</div>
+            </div>
+          </div>
+          <div class="activity-item">
+            <div class="activity-avatar">AS</div>
+            <div class="activity-content">
+              <div class="activity-text"><strong>Alice Smith</strong> created new feature flag</div>
+              <div class="activity-time">15 minutes ago</div>
+            </div>
+          </div>
+          <div class="activity-item">
+            <div class="activity-avatar">BJ</div>
+            <div class="activity-content">
+              <div class="activity-text"><strong>Bob Johnson</strong> updated security policy</div>
+              <div class="activity-time">32 minutes ago</div>
+            </div>
+          </div>
+          <div class="activity-item">
+            <div class="activity-avatar">DM</div>
+            <div class="activity-content">
+              <div class="activity-text"><strong>You</strong> modified user permissions</div>
+              <div class="activity-time">1 hour ago</div>
+            </div>
+          </div>
+          <div class="activity-item">
+            <div class="activity-avatar">CW</div>
+            <div class="activity-content">
+              <div class="activity-text"><strong>Carol White</strong> ran database migration</div>
+              <div class="activity-time">2 hours ago</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Flag Control Widget (Fixed in lower right) -->
+  <div class="flag-widget">
+    <fme-flag
+      flag="multivariant_demo"
+      workspace="194c1c50-3e22-11ea-ba75-12f2f63694e5"
+      env="Prod-Default"
+      api-url="http://localhost:3000/api"
+      poll-interval="10000"
+      compact>
+    </fme-flag>
+  </div>
+
+  <script type="module">
+    // Listen for flag events
+    customElements.whenDefined('fme-flag').then(() => {
+      const flagElement = document.querySelector('fme-flag');
+
+      flagElement.addEventListener('state-changed', (e) => {
+        console.log('[Admin Portal] Flag state changed:', e.detail);
+      });
+
+      flagElement.addEventListener('error', (e) => {
+        console.error('[Admin Portal] Flag error:', e.detail);
+      });
+    });
+  </script>
+</body>
+</html>

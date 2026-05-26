@@ -1,0 +1,22 @@
+{
+  "name": "fme-kit-api",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "REST API wrapper for Split.io Feature Management Engine",
+  "main": "api/index.js",
+  "scripts": {
+    "dev": "node server.js",
+    "deploy": "vercel --prod"
+  },
+  "keywords": ["feature-flags", "split.io", "harness", "fme"],
+  "author": "david.martin@harness.io",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^5.2.1",
+    "cors": "^2.8.6",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "vercel": "^34.0.0"
+  }
+}

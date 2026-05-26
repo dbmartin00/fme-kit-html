@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Multi-Variant Flag Test</title>
+  <script type="module" src="./fme-flag.js"></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 40px;
+      background: #f5f7fa;
+    }
+    h1 {
+      color: #333;
+    }
+    .test-container {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    .flag-widget {
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1), 0 10px 20px rgba(0,0,0,0.15);
+      border-radius: 12px;
+    }
+    .info {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      margin-top: 20px;
+    }
+    .info h3 {
+      margin-top: 0;
+    }
+    .info pre {
+      background: #f0f0f0;
+      padding: 10px;
+      border-radius: 4px;
+      overflow-x: auto;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="test-container">
+    <h1>Multi-Variant Flag Test</h1>
+    <p>Testing <strong>multivariant_demo</strong> flag with treatments: red, green, blue</p>
+
+    <div class="flag-widget">
+      <fme-flag
+        flag="multivariant_demo"
+        workspace="194c1c50-3e22-11ea-ba75-12f2f63694e5"
+        env="Prod-Default"
+        api-url="http://localhost:3000/api"
+        poll-interval="10000"
+        compact>
+      </fme-flag>
+    </div>
+
+    <div class="info">
+      <h3>Instructions</h3>
+      <p><strong>1. Click "Toggle"</strong> - Opens modal to choose treatment allocation</p>
+      <p><strong>2. Click "Kill"</strong> - Should show 🔴 KILLED status</p>
+      <p><strong>3. Click "Restore"</strong> - Should return to active state</p>
+      <p><strong>4. Change in FME UI</strong> - Polls every 10 seconds, should auto-update!</p>
+
+      <h3>Event Log (polls every 10s)</h3>
+      <pre id="log">Waiting for events...</pre>
+    </div>
+  </div>
+
+  <script type="module">
+    const log = document.getElementById('log');
+    log.textContent = '';
+
+    function addLog(msg) {
+      const timestamp = new Date().toLocaleTimeString();
+      log.textContent = `[${timestamp}] ${msg}\n` + log.textContent;
+    }
+
+    customElements.whenDefined('fme-flag').then(() => {
+      const flag = document.querySelector('fme-flag');
+
+      flag.addEventListener('state-changed', (e) => {
+        addLog(`State changed: ${JSON.stringify(e.detail)}`);
+      });
+
+      flag.addEventListener('error', (e) => {
+        addLog(`ERROR: ${e.detail.message}`);
+      });
+
+      addLog('Component loaded');
+    });
+  </script>
+</body>
+</html>
