@@ -1,4 +1,4 @@
-# FME Kit
+# FME Kit for Embedded FME
 
 Lightweight REST API and embeddable Web Component for controlling Harness FME (Split.io) feature flags.
 
