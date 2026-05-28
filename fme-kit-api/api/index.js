@@ -13,9 +13,14 @@ import {
   restoreFlag,
   patchApi
 } from '../lib/split-client.js';
+import { validateCredentials, generateToken, validateAuthConfig } from '../lib/auth.js';
+import { requireAuth } from '../lib/middleware.js';
 
 // Load environment variables
 dotenv.config({ path: new URL('../.env', import.meta.url) });
+
+// Validate authentication configuration
+validateAuthConfig();
 
 const app = express();
 
@@ -31,9 +36,50 @@ function requireParams(obj, ...params) {
   }
 }
 
+// POST /api/auth/login
+// Body: { username, password }
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+      return res.status(400).json({
+        error: 'Missing credentials',
+        code: 'MISSING_CREDENTIALS'
+      });
+    }
+
+    // Validate credentials
+    const isValid = await validateCredentials(username, password);
+
+    if (!isValid) {
+      return res.status(401).json({
+        error: 'Invalid credentials',
+        code: 'INVALID_CREDENTIALS'
+      });
+    }
+
+    // Generate token
+    const token = generateToken(username);
+    const expiresIn = process.env.JWT_EXPIRY || '8h';
+
+    res.json({
+      token,
+      username,
+      expiresIn
+    });
+  } catch (err) {
+    console.error('POST /api/auth/login error:', err);
+    res.status(500).json({
+      error: 'Authentication error',
+      code: 'AUTH_ERROR'
+    });
+  }
+});
+
 // GET /api/flags?workspace={wsId}&env={envName}
 // List all flags in workspace+environment
-app.get('/api/flags', async (req, res) => {
+app.get('/api/flags', requireAuth, async (req, res) => {
   try {
     const { workspace, env } = req.query;
     requireParams(req.query, 'workspace', 'env');
@@ -67,7 +113,7 @@ app.get('/api/flags', async (req, res) => {
 
 // GET /api/flags/:name/status?workspace={wsId}&env={envName}
 // Get detailed flag status
-app.get('/api/flags/:name/status', async (req, res) => {
+app.get('/api/flags/:name/status', requireAuth, async (req, res) => {
   try {
     const { workspace, env } = req.query;
     const { name: flagName } = req.params;
@@ -109,7 +155,7 @@ app.get('/api/flags/:name/status', async (req, res) => {
 
 // POST /api/flags/:name/toggle
 // Body: { workspace, env, treatment?: string, allocation?: number, allocations?: {treatment: size} }
-app.post('/api/flags/:name/toggle', async (req, res) => {
+app.post('/api/flags/:name/toggle', requireAuth, async (req, res) => {
   try {
     const { name: flagName } = req.params;
     const { workspace, env, treatment, allocation = 100, allocations } = req.body;
@@ -205,7 +251,7 @@ app.post('/api/flags/:name/toggle', async (req, res) => {
 
 // POST /api/flags/:name/kill
 // Body: { workspace, env, defaultTreatment?: string }
-app.post('/api/flags/:name/kill', async (req, res) => {
+app.post('/api/flags/:name/kill', requireAuth, async (req, res) => {
   try {
     const { name: flagName } = req.params;
     const { workspace, env } = req.body;
@@ -262,7 +308,7 @@ app.post('/api/flags/:name/kill', async (req, res) => {
 
 // POST /api/flags/:name/restore
 // Body: { workspace, env, treatment?: string }
-app.post('/api/flags/:name/restore', async (req, res) => {
+app.post('/api/flags/:name/restore', requireAuth, async (req, res) => {
   try {
     const { name: flagName } = req.params;
     const { workspace, env } = req.body;

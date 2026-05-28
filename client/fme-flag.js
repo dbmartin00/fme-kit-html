@@ -14,6 +14,11 @@ class FmeFlagElement extends HTMLElement {
     this._flagData = null;
     this._error = null;
     this._modalOpen = false; // Track if modal is open
+
+    // Authentication state
+    this._authState = 'checking'; // 'checking' | 'unauthenticated' | 'authenticated'
+    this._authToken = null;
+    this._loginError = null;
   }
 
   // Public getters for external access
@@ -21,6 +26,8 @@ class FmeFlagElement extends HTMLElement {
   get flagData() { return this._flagData; }
   get error() { return this._error; }
   get modalOpen() { return this._modalOpen; }
+  get authState() { return this._authState; }
+  get authToken() { return this._authToken; }
 
   connectedCallback() {
     // Parse attributes
@@ -31,19 +38,46 @@ class FmeFlagElement extends HTMLElement {
     this.pollInterval = parseInt(this.getAttribute('poll-interval') || '60000'); // Default 60s
     this.compact = this.hasAttribute('compact');
 
-    // Initial render and fetch
-    this.render();
-    this.fetchStatus();
+    // Listen for shared session events
+    this._handleLoginEvent = (e) => {
+      console.log('[FME Flag] Login event received');
+      this._authToken = e.detail?.token || sessionStorage.getItem('fme-kit-auth-token');
+      this._authState = 'authenticated';
+      this._loginError = null;
+      this.render();
+      this.fetchStatus();
+      if (this.pollInterval > 0) {
+        this.startPolling();
+      }
+    };
 
-    // Start polling if interval > 0
-    if (this.pollInterval > 0) {
-      this.startPolling();
-    }
+    this._handleLogoutEvent = () => {
+      console.log('[FME Flag] Logout event received');
+      this._authToken = null;
+      this._authState = 'unauthenticated';
+      this._loginError = 'Session expired, please login again';
+      this.stopPolling();
+      this.render();
+    };
+
+    window.addEventListener('fme-kit-login', this._handleLoginEvent);
+    window.addEventListener('fme-kit-logout', this._handleLogoutEvent);
+
+    // Check authentication status
+    this.checkAuth();
   }
 
   disconnectedCallback() {
     // Clean up polling timer when component removed
     this.stopPolling();
+
+    // Remove event listeners
+    if (this._handleLoginEvent) {
+      window.removeEventListener('fme-kit-login', this._handleLoginEvent);
+    }
+    if (this._handleLogoutEvent) {
+      window.removeEventListener('fme-kit-logout', this._handleLogoutEvent);
+    }
   }
 
   attributeChangedCallback(name, oldValue, newValue) {
@@ -91,6 +125,92 @@ class FmeFlagElement extends HTMLElement {
     }
   }
 
+  // Check authentication status
+  checkAuth() {
+    const token = sessionStorage.getItem('fme-kit-auth-token');
+    console.log('[FME Flag] checkAuth - token exists:', !!token);
+    if (token) {
+      this._authToken = token;
+      this._authState = 'authenticated';
+      console.log('[FME Flag] checkAuth - authenticated, will fetch status');
+      // Initial render and fetch
+      this.render();
+      this.fetchStatus();
+      // Start polling if interval > 0
+      if (this.pollInterval > 0) {
+        this.startPolling();
+      }
+    } else {
+      console.log('[FME Flag] checkAuth - no token, showing login form');
+      this._authState = 'unauthenticated';
+      this.render();
+    }
+  }
+
+  // Handle login
+  async handleLogin(username, password) {
+    try {
+      console.log('[FME Flag] Attempting login...');
+      const response = await fetch(`${this.apiUrl}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Login failed');
+      }
+
+      const data = await response.json();
+      this._authToken = data.token;
+      this._authState = 'authenticated';
+      this._loginError = null;
+
+      // Store token in sessionStorage
+      sessionStorage.setItem('fme-kit-auth-token', data.token);
+
+      // Emit login event for other components
+      window.dispatchEvent(new CustomEvent('fme-kit-login', {
+        detail: { token: data.token, username: data.username }
+      }));
+
+      console.log('[FME Flag] Login successful');
+
+      // Initial fetch and start polling
+      this.render();
+      this.fetchStatus();
+      if (this.pollInterval > 0) {
+        this.startPolling();
+      }
+    } catch (err) {
+      console.error('[FME Flag] Login error:', err);
+      this._loginError = err.message;
+      this.render();
+    }
+  }
+
+  // Handle logout
+  handleLogout() {
+    this._authToken = null;
+    this._authState = 'unauthenticated';
+    sessionStorage.removeItem('fme-kit-auth-token');
+    this.stopPolling();
+
+    // Emit logout event for other components
+    window.dispatchEvent(new Event('fme-kit-logout'));
+
+    this.render();
+  }
+
+  // Submit login form
+  submitLogin(event) {
+    const formData = new FormData(event.target);
+    const username = formData.get('username');
+    const password = formData.get('password');
+    this.handleLogin(username, password);
+  }
+
   async fetchStatus() {
     // Skip fetch if modal is open (user is editing)
     if (this._modalOpen) {
@@ -112,8 +232,22 @@ class FmeFlagElement extends HTMLElement {
     try {
       const url = `${this.apiUrl}/flags/${encodeURIComponent(this.flagName)}/status?workspace=${encodeURIComponent(this.workspace)}&env=${encodeURIComponent(this.env)}`;
       console.log('[FME Flag] Fetching:', url);
-      const response = await fetch(url);
+
+      // Include Authorization header if authenticated
+      const headers = {};
+      if (this._authToken) {
+        headers['Authorization'] = `Bearer ${this._authToken}`;
+      }
+
+      const response = await fetch(url, { headers });
       console.log('[FME Flag] Response status:', response.status);
+
+      // Handle 401 - authentication required
+      if (response.status === 401) {
+        console.log('[FME Flag] 401 Unauthorized - logging out');
+        this.handleLogout();
+        return;
+      }
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -318,9 +452,15 @@ class FmeFlagElement extends HTMLElement {
       this._state = 'loading';
       this.render();
 
+      // Include Authorization header if authenticated
+      const headers = { 'Content-Type': 'application/json' };
+      if (this._authToken) {
+        headers['Authorization'] = `Bearer ${this._authToken}`;
+      }
+
       const response = await fetch(`${this.apiUrl}/flags/${encodeURIComponent(this.flagName)}/toggle`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           workspace: this.workspace,
           env: this.env,
@@ -328,6 +468,13 @@ class FmeFlagElement extends HTMLElement {
           allocation
         })
       });
+
+      // Handle 401 - authentication required
+      if (response.status === 401) {
+        console.log('[FME Flag] 401 Unauthorized - logging out');
+        this.handleLogout();
+        return;
+      }
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -372,14 +519,27 @@ class FmeFlagElement extends HTMLElement {
       this._state = 'loading';
       this.render();
 
+      // Include Authorization header if authenticated
+      const headers = { 'Content-Type': 'application/json' };
+      if (this._authToken) {
+        headers['Authorization'] = `Bearer ${this._authToken}`;
+      }
+
       const response = await fetch(`${this.apiUrl}/flags/${encodeURIComponent(this.flagName)}/kill`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           workspace: this.workspace,
           env: this.env
         })
       });
+
+      // Handle 401 - authentication required
+      if (response.status === 401) {
+        console.log('[FME Flag] 401 Unauthorized - logging out');
+        this.handleLogout();
+        return;
+      }
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -435,11 +595,24 @@ class FmeFlagElement extends HTMLElement {
         body.treatment = treatment;
       }
 
+      // Include Authorization header if authenticated
+      const headers = { 'Content-Type': 'application/json' };
+      if (this._authToken) {
+        headers['Authorization'] = `Bearer ${this._authToken}`;
+      }
+
       const response = await fetch(`${this.apiUrl}/flags/${encodeURIComponent(this.flagName)}/restore`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(body)
       });
+
+      // Handle 401 - authentication required
+      if (response.status === 401) {
+        console.log('[FME Flag] 401 Unauthorized - logging out');
+        this.handleLogout();
+        return;
+      }
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -485,16 +658,29 @@ class FmeFlagElement extends HTMLElement {
       this._state = 'loading';
       this.render();
 
+      // Include Authorization header if authenticated
+      const headers = { 'Content-Type': 'application/json' };
+      if (this._authToken) {
+        headers['Authorization'] = `Bearer ${this._authToken}`;
+      }
+
       // Send the full allocations object to the API
       const response = await fetch(`${this.apiUrl}/flags/${encodeURIComponent(this.flagName)}/toggle`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           workspace: this.workspace,
           env: this.env,
           allocations  // Send full allocations: {red: 50, green: 49, blue: 1}
         })
       });
+
+      // Handle 401 - authentication required
+      if (response.status === 401) {
+        console.log('[FME Flag] 401 Unauthorized - logging out');
+        this.handleLogout();
+        return;
+      }
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -555,6 +741,7 @@ class FmeFlagElement extends HTMLElement {
       :host([compact]) {
         background: transparent;
         padding: 0;
+        min-width: 400px;
       }
 
       /* Modal styles */
@@ -762,6 +949,21 @@ class FmeFlagElement extends HTMLElement {
         background: #10b981;
         color: white;
       }
+      .compact-btn.logout {
+        background: #9ca3af;
+        color: #e5e7eb;
+        padding: 8px 12px;
+        font-size: 16px;
+        line-height: 1;
+        border: 1px solid #6b7280;
+        transition: all 0.2s;
+      }
+      .compact-btn.logout:hover {
+        background: #ef4444;
+        color: white;
+        border-color: #dc2626;
+        transform: translateY(-1px);
+      }
       .loading {
         color: #666;
         font-size: 14px;
@@ -842,10 +1044,128 @@ class FmeFlagElement extends HTMLElement {
         background: #d32f2f;
         color: white;
       }
+      button.logout-btn {
+        background: #9ca3af;
+        color: #e5e7eb;
+        padding: 10px 14px;
+        font-size: 16px;
+        line-height: 1;
+        border: 1px solid #6b7280;
+        margin-left: auto;
+      }
+      button.logout-btn:hover {
+        background: #ef4444;
+        color: white;
+        border-color: #dc2626;
+      }
+
+      /* Login form styles */
+      .login-container {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 200px;
+        padding: 20px;
+      }
+      .login-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 12px;
+        padding: 32px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        color: white;
+        max-width: 350px;
+        width: 100%;
+      }
+      .login-header {
+        font-size: 20px;
+        font-weight: 600;
+        margin-bottom: 24px;
+        text-align: center;
+      }
+      .login-form {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .form-group label {
+        font-size: 13px;
+        font-weight: 500;
+        opacity: 0.9;
+      }
+      .form-group input {
+        padding: 10px 12px;
+        border: none;
+        border-radius: 6px;
+        font-size: 14px;
+        background: rgba(255,255,255,0.2);
+        color: white;
+        backdrop-filter: blur(10px);
+      }
+      .form-group input::placeholder {
+        color: rgba(255,255,255,0.6);
+      }
+      .form-group input:focus {
+        outline: none;
+        background: rgba(255,255,255,0.3);
+        box-shadow: 0 0 0 2px rgba(255,255,255,0.5);
+      }
+      .login-btn {
+        padding: 12px;
+        background: rgba(255,255,255,0.9);
+        color: #667eea;
+        border: none;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        margin-top: 8px;
+      }
+      .login-btn:hover {
+        background: white;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      }
+      .login-error {
+        background: rgba(244, 67, 54, 0.9);
+        color: white;
+        padding: 10px 12px;
+        border-radius: 6px;
+        font-size: 13px;
+        text-align: center;
+      }
     `;
 
     let html;
-    if (state === 'loading') {
+
+    // Show login form if unauthenticated
+    if (this._authState === 'unauthenticated' || this._authState === 'checking') {
+      const errorMsg = this._loginError ? `<div class="login-error">${this._loginError}</div>` : '';
+      html = `
+        <div class="login-container">
+          <div class="login-card">
+            <div class="login-header">🔐 Authentication Required</div>
+            <form class="login-form" onsubmit="event.preventDefault(); this.getRootNode().host.submitLogin(event);">
+              ${errorMsg}
+              <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" required autocomplete="username">
+              </div>
+              <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required autocomplete="current-password">
+              </div>
+              <button type="submit" class="login-btn">Sign In</button>
+            </form>
+          </div>
+        </div>
+      `;
+    } else if (state === 'loading') {
       html = '<div class="loading">Loading...</div>';
     } else if (state === 'error') {
       html = `<div class="error">Error: ${error}</div>`;
@@ -912,6 +1232,9 @@ class FmeFlagElement extends HTMLElement {
               ${isKilled
                 ? '<button class="compact-btn restore" onclick="this.getRootNode().host.restore()">Restore</button>'
                 : '<button class="compact-btn kill" onclick="this.getRootNode().host.kill()">Kill</button>'}
+              <button class="compact-btn logout" onclick="this.getRootNode().host.handleLogout()" title="Logout">
+                ⏻
+              </button>
             </div>
           </div>
         `;
@@ -930,6 +1253,9 @@ class FmeFlagElement extends HTMLElement {
             ${isKilled
               ? '<button class="primary" onclick="this.getRootNode().host.restore()">Restore</button>'
               : '<button class="danger" onclick="this.getRootNode().host.kill()">Kill</button>'}
+            <button class="logout-btn" onclick="this.getRootNode().host.handleLogout()" title="Logout">
+              ⏻
+            </button>
           </div>
         `;
       }
