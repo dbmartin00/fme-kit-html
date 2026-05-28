@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Page Refresh Auth</title>
+  <script type="module" src="./fme-flag.js"></script>
+  <style>
+    body {
+      font-family: monospace;
+      padding: 20px;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+    .debug {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      padding: 16px;
+      border-radius: 8px;
+      margin: 20px 0;
+      max-height: 400px;
+      overflow-y: auto;
+      font-size: 12px;
+    }
+    .debug pre {
+      margin: 2px 0;
+      white-space: pre-wrap;
+    }
+    .info { color: #89d185; }
+    .warn { color: #f48771; }
+    .error { color: #ff6b6b; }
+    button {
+      padding: 10px 20px;
+      margin: 10px 5px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>Auth Persistence Test</h1>
+
+  <div class="debug" id="debug">
+    <pre class="info">Debug log initialized...</pre>
+  </div>
+
+  <button onclick="checkStorage()">Check sessionStorage</button>
+  <button onclick="location.reload()">Refresh Page</button>
+  <button onclick="clearStorage()">Clear Storage</button>
+
+  <hr>
+
+  <fme-flag
+    id="test-flag"
+    flag="ff_ops_route_policy_evaluator_v2"
+    workspace="37200d40-401e-11f1-acc9-f629ae8e8506"
+    env="dev"
+    api-url="http://localhost:3000/api"
+    poll-interval="0">
+  </fme-flag>
+
+  <script>
+    const debug = document.getElementById('debug');
+
+    function log(message, type = 'info') {
+      const pre = document.createElement('pre');
+      pre.className = type;
+      pre.textContent = `[${new Date().toISOString().substr(11, 12)}] ${message}`;
+      debug.prepend(pre);
+    }
+
+    function checkStorage() {
+      const token = sessionStorage.getItem('fme-kit-auth-token');
+      if (token) {
+        log(`Token found: ${token.substring(0, 50)}...`, 'info');
+
+        // Try to decode it
+        try {
+          const parts = token.split('.');
+          const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+          log(`Token payload: ${JSON.stringify(payload, null, 2)}`, 'info');
+
+          const exp = payload.exp * 1000;
+          const now = Date.now();
+          const timeLeft = exp - now;
+
+          if (timeLeft > 0) {
+            log(`Token expires in: ${Math.floor(timeLeft / 1000 / 60)} minutes`, 'info');
+          } else {
+            log(`Token EXPIRED ${Math.floor(Math.abs(timeLeft) / 1000 / 60)} minutes ago`, 'error');
+          }
+        } catch (e) {
+          log(`Error decoding token: ${e.message}`, 'error');
+        }
+      } else {
+        log('No token in sessionStorage', 'warn');
+      }
+
+      // Check component state
+      const flag = document.getElementById('test-flag');
+      log(`Component authState: ${flag.authState}`, 'info');
+      log(`Component has token: ${!!flag.authToken}`, 'info');
+    }
+
+    function clearStorage() {
+      sessionStorage.clear();
+      log('Storage cleared', 'warn');
+      checkStorage();
+    }
+
+    // Log on page load
+    log('=== PAGE LOADED ===', 'info');
+
+    // Check storage immediately
+    setTimeout(() => {
+      checkStorage();
+    }, 500);
+
+    // Listen for auth events
+    window.addEventListener('fme-kit-login', (e) => {
+      log('LOGIN event fired', 'info');
+      checkStorage();
+    });
+
+    window.addEventListener('fme-kit-logout', () => {
+      log('LOGOUT event fired', 'warn');
+      checkStorage();
+    });
+
+    // Listen for component events
+    const flag = document.getElementById('test-flag');
+    flag.addEventListener('state-changed', (e) => {
+      log(`State changed: ${e.detail.state}`, 'info');
+    });
+
+    flag.addEventListener('error', (e) => {
+      log(`Error: ${e.detail.message}`, 'error');
+    });
+
+    // Monitor sessionStorage changes
+    const originalSetItem = sessionStorage.setItem;
+    sessionStorage.setItem = function(key, value) {
+      if (key === 'fme-kit-auth-token') {
+        log(`sessionStorage.setItem('${key}', '${value.substring(0, 30)}...')`, 'info');
+      }
+      originalSetItem.apply(this, arguments);
+    };
+
+    const originalRemoveItem = sessionStorage.removeItem;
+    sessionStorage.removeItem = function(key) {
+      if (key === 'fme-kit-auth-token') {
+        log(`sessionStorage.removeItem('${key}')`, 'warn');
+      }
+      originalRemoveItem.apply(this, arguments);
+    };
+  </script>
+</body>
+</html>

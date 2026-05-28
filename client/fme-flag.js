@@ -21,6 +21,35 @@ class FmeFlagElement extends HTMLElement {
     this._loginError = null;
   }
 
+  /**
+   * Decode JWT token and check if expired
+   * @param {string} token - JWT token
+   * @returns {Object|null} - Decoded payload if valid and not expired, null otherwise
+   */
+  _parseAndValidateToken(token) {
+    if (!token) return null;
+
+    try {
+      // JWT format: header.payload.signature
+      const parts = token.split('.');
+      if (parts.length !== 3) return null;
+
+      // Decode payload (base64url)
+      const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+
+      // Check expiration (exp is in seconds, Date.now() is in milliseconds)
+      if (payload.exp && payload.exp * 1000 < Date.now()) {
+        console.log('[FME Flag] Token expired');
+        return null;
+      }
+
+      return payload;
+    } catch (err) {
+      console.error('[FME Flag] Token parse error:', err);
+      return null;
+    }
+  }
+
   // Public getters for external access
   get state() { return this._state; }
   get flagData() { return this._flagData; }
@@ -41,13 +70,25 @@ class FmeFlagElement extends HTMLElement {
     // Listen for shared session events
     this._handleLoginEvent = (e) => {
       console.log('[FME Flag] Login event received');
-      this._authToken = e.detail?.token || sessionStorage.getItem('fme-kit-auth-token');
-      this._authState = 'authenticated';
-      this._loginError = null;
-      this.render();
-      this.fetchStatus();
-      if (this.pollInterval > 0) {
-        this.startPolling();
+      const token = e.detail?.token || sessionStorage.getItem('fme-kit-auth-token');
+
+      // Validate the token before using it
+      const payload = this._parseAndValidateToken(token);
+
+      if (payload) {
+        this._authToken = token;
+        this._authState = 'authenticated';
+        this._loginError = null;
+        this.render();
+        this.fetchStatus();
+        if (this.pollInterval > 0) {
+          this.startPolling();
+        }
+      } else {
+        console.log('[FME Flag] Login event - invalid or expired token');
+        this._authState = 'unauthenticated';
+        this._loginError = 'Session expired, please login again';
+        this.render();
       }
     };
 
@@ -104,8 +145,8 @@ class FmeFlagElement extends HTMLElement {
         return; // Don't fetch for compact mode changes
       }
 
-      // Only fetch if all required attributes are set
-      if (this.flagName && this.workspace && this.env && this.apiUrl) {
+      // Only fetch if all required attributes are set AND authenticated
+      if (this.flagName && this.workspace && this.env && this.apiUrl && this._authState === 'authenticated') {
         this.fetchStatus();
       }
     }
@@ -128,23 +169,42 @@ class FmeFlagElement extends HTMLElement {
   // Check authentication status
   checkAuth() {
     const token = sessionStorage.getItem('fme-kit-auth-token');
+    console.log('[FME Flag] checkAuth - START');
     console.log('[FME Flag] checkAuth - token exists:', !!token);
     if (token) {
-      this._authToken = token;
-      this._authState = 'authenticated';
-      console.log('[FME Flag] checkAuth - authenticated, will fetch status');
-      // Initial render and fetch
-      this.render();
-      this.fetchStatus();
-      // Start polling if interval > 0
-      if (this.pollInterval > 0) {
-        this.startPolling();
+      console.log('[FME Flag] checkAuth - token preview:', token.substring(0, 50) + '...');
+    }
+
+    if (token) {
+      // Validate token is not expired
+      console.log('[FME Flag] checkAuth - calling _parseAndValidateToken');
+      const payload = this._parseAndValidateToken(token);
+      console.log('[FME Flag] checkAuth - validation result:', payload ? 'VALID' : 'INVALID/EXPIRED');
+
+      if (payload) {
+        // Token is valid and not expired
+        this._authToken = token;
+        this._authState = 'authenticated';
+        console.log('[FME Flag] checkAuth - authenticated, will fetch status');
+        this.render();
+        this.fetchStatus();
+        if (this.pollInterval > 0) {
+          this.startPolling();
+        }
+      } else {
+        // Token is expired or invalid - clear it and show login
+        console.log('[FME Flag] checkAuth - token invalid or expired, clearing');
+        sessionStorage.removeItem('fme-kit-auth-token');
+        this._authToken = null;
+        this._authState = 'unauthenticated';
+        this.render();
       }
     } else {
       console.log('[FME Flag] checkAuth - no token, showing login form');
       this._authState = 'unauthenticated';
       this.render();
     }
+    console.log('[FME Flag] checkAuth - END (authState=' + this._authState + ')');
   }
 
   // Handle login

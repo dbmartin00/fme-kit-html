@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>SessionStorage Test</title>
+</head>
+<body>
+  <h1>SessionStorage Persistence Test</h1>
+  <button onclick="setTest()">Set Test Value</button>
+  <button onclick="checkTest()">Check Test Value</button>
+  <button onclick="location.reload()">Refresh Page</button>
+  <div id="output" style="margin-top: 20px; font-family: monospace;"></div>
+
+  <script>
+    const output = document.getElementById('output');
+
+    function log(msg) {
+      output.innerHTML += msg + '<br>';
+    }
+
+    function setTest() {
+      sessionStorage.setItem('test-value', 'Hello at ' + new Date().toLocaleTimeString());
+      log('✓ Set test-value in sessionStorage');
+      checkTest();
+    }
+
+    function checkTest() {
+      const val = sessionStorage.getItem('test-value');
+      if (val) {
+        log('✓ Found test-value: ' + val);
+      } else {
+        log('✗ test-value NOT found in sessionStorage');
+      }
+    }
+
+    // Check on page load
+    log('=== PAGE LOADED at ' + new Date().toLocaleTimeString() + ' ===');
+    checkTest();
+  </script>
+</body>
+</html>
